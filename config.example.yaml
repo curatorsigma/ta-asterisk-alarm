@@ -1,0 +1,39 @@
+# configs for receiving data from the CMI
+# CMI NEEDS to send the Value as Digital-On/Off (unit id 43)
+cmi:
+  # listen on this addr (needs to be bound on the host running this service)
+  # will listen on UDP --listen_addr--:5442. Make sure to allow this in your firewall.
+  listen_addr: "0.0.0.0"
+  # ignore packets from IP addresses except
+  expect_from_addr: "192.168.10.123"
+  # ignore data sent to other virtual CAN-IDs
+  expect_index: 12
+  # ignore data sent to other PDO values
+  expect_pdo: 1
+
+# configs for asterisk
+#
+# NOTES:
+# - connection to asterisk uses TLS. It is not possible to opt-out.
+# - Trusted certs are:
+#   - rusts webpki certificates (mozillas trusted ca list)
+#   - optionally the certs in the file given here
+asterisk:
+  # Host to send AMI commands to
+  # MUST match name in Certificates SAN
+  host: "asterisk.example.com"
+  # port. Uses TLS/TCP. Defaults to 5039.
+  port: 5039
+  # trust the Root CA certs in this .pem file. Optional.
+  # NOTES:
+  # - self-signed certs are NOT supported.
+  # - See `README.md::Getting Started` for how to set this up
+  trust_extra_pem: "/etc/ssl/certs/asterisk.pem"
+  # execute in this context
+  execute_context: "commands"
+  # execute this extension in that context
+  execute_exten: "your_exten_name"
+  # execute starting at this priority of the extension
+  # default so "1"
+  execute_priority: "1"
+
