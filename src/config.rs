@@ -1,9 +1,14 @@
 //! Configuration parameters for the TA->Asterisk sync
 
-use std::{fs::File, io::BufReader, net::{IpAddr, SocketAddr, TcpStream, UdpSocket}, path::Path, sync::Arc};
-use std::io::BufRead;
+use std::{
+    fs::File,
+    io::BufReader,
+    net::{IpAddr, TcpStream, UdpSocket},
+    path::Path,
+    sync::Arc,
+};
 
-use rustls::{compress::CertDecompressor, pki_types::{CertificateDer, TrustAnchor}, ClientConfig, ClientConnection, RootCertStore};
+use rustls::{pki_types::TrustAnchor, ClientConfig, ClientConnection};
 use serde::Deserialize;
 use tracing::{debug, event, Level};
 
@@ -65,7 +70,7 @@ pub struct CmiConfigData {
 }
 
 /// Configuration for the interaction with Asterisk.
-#[derive(Debug,Deserialize)]
+#[derive(Debug, Deserialize)]
 pub struct AsteriskConfig {
     /// The host to make calls to.
     pub host: String,
@@ -124,7 +129,7 @@ impl Config {
                         return Err(e)?;
                     }
                 }
-            };
+            }
             Ok(res)
         } else {
             Ok(std::vec::Vec::<TrustAnchor<'static>>::new())
@@ -132,20 +137,26 @@ impl Config {
     }
 
     /// prepare the stream to talk to asterisk with
-    pub fn asterisk_stream(&self) -> Result<rustls::StreamOwned<rustls::ClientConnection, TcpStream>, Box<dyn std::error::Error>> {
+    pub fn asterisk_stream(
+        &self,
+    ) -> Result<rustls::StreamOwned<rustls::ClientConnection, TcpStream>, Box<dyn std::error::Error>>
+    {
         debug!("Trying to connect to Asterisk AMI. Make sure asterisk is reachable if this hangs!");
         // setup rustls config (used for TCP stream with asterisk)
-        let asterisk_tcp = TcpStream::connect(format!("{}:{}", self.asterisk.host, self.asterisk.port.unwrap_or(5038)))?;
+        let asterisk_tcp = TcpStream::connect(format!(
+            "{}:{}",
+            self.asterisk.host,
+            self.asterisk.port.unwrap_or(5038)
+        ))?;
         let mut roots: Vec<TrustAnchor> = webpki_roots::TLS_SERVER_ROOTS.into();
         roots.extend(self.additional_certs()?.into_iter());
-        let root_store = rustls::RootCertStore {
-            roots,
-        };
+        let root_store = rustls::RootCertStore { roots };
         let tls_config = ClientConfig::builder()
             .with_root_certificates(root_store)
             .with_no_client_auth();
         // TLS stream to asterisk
-        let asterisk_conn = ClientConnection::new(Arc::new(tls_config), self.asterisk.host.clone().try_into()?)?;
+        let asterisk_conn =
+            ClientConnection::new(Arc::new(tls_config), self.asterisk.host.clone().try_into()?)?;
         Ok(rustls::StreamOwned::new(asterisk_conn, asterisk_tcp))
     }
 }

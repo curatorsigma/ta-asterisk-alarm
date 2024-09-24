@@ -21,19 +21,24 @@ fn send_ami_command(config: &Config) -> Result<(), Box<dyn std::error::Error>> {
     };
     let command = format!(
         "Action: Originate\r\nExten: {}\r\nContext: {}\r\nPriority: {}\r\n\r\n",
-        config.asterisk.execute_exten,
-        config.asterisk.execute_context,
-        priority,
-        );
+        config.asterisk.execute_exten, config.asterisk.execute_context, priority,
+    );
     asterisk_stream.write(command.as_bytes())?;
     Ok(())
 }
 
 /// Process a single UDP packet, potentially calling to asterisk.
-fn packet_is_alarm(config: &Config, buf: &[u8], remote: SocketAddr) -> Result<bool, Box<dyn std::error::Error>> {
+fn packet_is_alarm(
+    config: &Config,
+    buf: &[u8],
+    remote: SocketAddr,
+) -> Result<bool, Box<dyn std::error::Error>> {
     // check if we want to receive packets from the remote
     if remote.ip() != config.cmi.expect_from_addr {
-        trace!("Got a COE payload, but ignoring it does not come from {}", config.cmi.expect_from_addr);
+        trace!(
+            "Got a COE payload, but ignoring it does not come from {}",
+            config.cmi.expect_from_addr
+        );
         // silently ignore packets from the wrong IP
         return Ok(false);
     };
@@ -42,11 +47,17 @@ fn packet_is_alarm(config: &Config, buf: &[u8], remote: SocketAddr) -> Result<bo
     // ignore packets to the wrong ID or PDO
     'payload: for payload in packet {
         if payload.node() != config.cmi.expect_index {
-            trace!("Got a COE payload, but ignoring it because the CAN-ID is not {}", config.cmi.expect_index);
+            trace!(
+                "Got a COE payload, but ignoring it because the CAN-ID is not {}",
+                config.cmi.expect_index
+            );
             continue 'payload;
         };
         if payload.pdo_index() != config.cmi.expect_pdo {
-            trace!("Got a COE payload, but ignoring it because the pdo index is not {}", config.cmi.expect_pdo);
+            trace!(
+                "Got a COE payload, but ignoring it because the pdo index is not {}",
+                config.cmi.expect_pdo
+            );
             continue 'payload;
         };
         // we have a packet to the correct CAN-ID and PDO, from the correct Address
@@ -61,7 +72,7 @@ fn packet_is_alarm(config: &Config, buf: &[u8], remote: SocketAddr) -> Result<bo
                 return Ok(false);
             }
         }
-    };
+    }
     debug!("Got a COE packet, but no payload was relevant.");
     Ok(false)
 }
@@ -86,9 +97,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     // startup.
     let _ = config.asterisk_stream()?;
 
-    info!("Got config and UDP socket. Now listening for COE packets on {}", cmi_listen_socket.local_addr()?);
+    info!(
+        "Got config and UDP socket. Now listening for COE packets on {}",
+        cmi_listen_socket.local_addr()?
+    );
     loop {
-        let mut buf = [0_u8;252];
+        let mut buf = [0_u8; 252];
         match cmi_listen_socket.recv_from(&mut buf) {
             Ok((len, addr)) => {
                 trace!("Received UDP packet of {len} bytes on CMI listen socket.");
@@ -97,12 +111,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     Ok(false) => {
                         debug!("Correctly handled a single UDP packet from the CMI.");
                     }
-                    Ok(true) => {
-                        match send_ami_command(&config) {
-                            Ok(()) => info!("Correctly send a command to asterisk."),
-                            Err(e) => warn!("Tried to send an AMI command to asterisk, but got this error: {e}"),
-                        }
-                    }
+                    Ok(true) => match send_ami_command(&config) {
+                        Ok(()) => info!("Correctly send a command to asterisk."),
+                        Err(e) => warn!(
+                            "Tried to send an AMI command to asterisk, but got this error: {e}"
+                        ),
+                    },
                     Err(e) => {
                         warn!("Error while processing packet: {e}");
                     }
@@ -112,5 +126,5 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 warn!("Error receiving UDP packet on CMI listen socket: {e}.");
             }
         };
-    };
+    }
 }
