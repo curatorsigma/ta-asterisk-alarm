@@ -12,6 +12,8 @@ use rustls::{pki_types::TrustAnchor, ClientConfig, ClientConnection};
 use serde::Deserialize;
 use tracing::{debug, event, Level};
 
+use crate::ami::{self, AmiConnection};
+
 #[derive(Debug)]
 pub struct Config {
     pub cmi: CmiConfig,
@@ -142,9 +144,9 @@ impl Config {
     }
 
     /// prepare the stream to talk to asterisk with
-    pub fn asterisk_stream(
+    pub fn asterisk_connection(
         &self,
-    ) -> Result<rustls::StreamOwned<rustls::ClientConnection, TcpStream>, Box<dyn std::error::Error>>
+    ) -> Result<AmiConnection, Box<dyn std::error::Error>>
     {
         debug!("Trying to connect to Asterisk AMI. Make sure asterisk is reachable if this hangs!");
         // setup rustls config (used for TCP stream with asterisk)
@@ -162,6 +164,6 @@ impl Config {
         // TLS stream to asterisk
         let asterisk_conn =
             ClientConnection::new(Arc::new(tls_config), self.asterisk.host.clone().try_into()?)?;
-        Ok(rustls::StreamOwned::new(asterisk_conn, asterisk_tcp))
+        Ok(AmiConnection::new(rustls::StreamOwned::new(asterisk_conn, asterisk_tcp)))
     }
 }

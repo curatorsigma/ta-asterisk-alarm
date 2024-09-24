@@ -3,6 +3,7 @@ use std::net::{SocketAddr, TcpStream};
 use std::thread::sleep;
 use std::time::Duration;
 
+use ami::AmiConnection;
 use coe::Packet;
 use config::Config;
 use rustls::{ClientConnection, StreamOwned};
@@ -11,19 +12,30 @@ use tracing::{debug, error, info, trace, warn};
 use tracing_subscriber::fmt::format::FmtSpan;
 use tracing_subscriber::prelude::*;
 
-mod config;
+use crate::ami::AmiError;
 
-fn try_login(config: &Config, mut stream: StreamOwned<ClientConnection, TcpStream>) -> Result<(), std::io::Error> {
+mod config;
+mod ami;
+
+fn try_login(config: &Config, mut ami_conn: AmiConnection) -> Result<(), Box<dyn std::error::Error>> {
+    let version = ami_conn.read_version_line()?;
+    trace!("Was able to get this version from ami: {version}.");
     let command = format!(
         "Action: Login\r\nAuthType: plain\r\nUsername: {}\r\nSecret: {}\r\nEvents: off\r\n\r\n", config.asterisk.username, config.asterisk.secret);
-    stream.write(command.as_bytes())?;
-    // TODO check that the response is Success
+    let response = ami_conn.send_action(command)?;
+    let success = response.lines()
+        .any(|l| l.starts_with("Response: Success"));
+    if success {
+        trace!("Login was acknowledged.");
+    } else {
+        return Err(AmiError::LoginFailure)?;
+    }
     Ok(())
 }
 
 /// Send the AMI command to asterisk.
 fn send_ami_command(config: &Config) -> Result<(), Box<dyn std::error::Error>> {
-    let mut asterisk_stream = config.asterisk_stream()?;
+    let mut ami_conn = config.asterisk_connection()?;
 
     let priority = if let Some(x) = &config.asterisk.execute_priority {
         x
@@ -34,7 +46,8 @@ fn send_ami_command(config: &Config) -> Result<(), Box<dyn std::error::Error>> {
         "Action: Originate\r\nExten: {}\r\nContext: {}\r\nPriority: {}\r\n",
         config.asterisk.execute_exten, config.asterisk.execute_context, priority,
     );
-    asterisk_stream.write(command.as_bytes())?;
+    ami_conn.send_action(command)?;
+    todo!();
     Ok(())
 }
 
@@ -106,8 +119,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let cmi_listen_socket = config.cmi_listen_socket()?;
     // force the opening of a TLS stream. This makes error messages available immediately on
     // startup.
-    let asterisk_stream = config.asterisk_stream()?;
-    match try_login(&config, asterisk_stream) {
+    let ami_conn = config.asterisk_connection()?;
+    match try_login(&config, ami_conn) {
         Ok(()) => info!("Connection to asterisk could be established."),
         Err(e) => {
             error!("Unable to connect to asterisk: {e}");
