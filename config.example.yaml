@@ -18,6 +18,7 @@ cmi:
 # - Trusted certs are:
 #   - rusts webpki certificates (mozillas trusted ca list)
 #   - optionally the certs in the file given here
+# - Login happens in plaintext, but over TLS (i.e. MD5-Digest is NOT used)
 asterisk:
   # Host to send AMI commands to
   # MUST match name in Certificates SAN
@@ -29,6 +30,10 @@ asterisk:
   # - self-signed certs are NOT supported.
   # - See `README.md::Getting Started` for how to set this up
   trust_extra_pem: "/etc/ssl/certs/asterisk.pem"
+  # username: username used to login to asterisk
+  username: "ta-asterisk-alarm"
+  # This secret is used to login to asterisk
+  secret: "NOT_THE_SECRET"
   # execute in this context
   execute_context: "commands"
   # execute this extension in that context

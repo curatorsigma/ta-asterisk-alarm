@@ -86,6 +86,9 @@ pub struct AsteriskConfig {
     pub execute_priority: Option<String>,
     /// In addition to global certs, also trust the CAs in this pem file
     pub trust_extra_pem: Option<String>,
+    /// use to login to asterisk
+    pub username: String,
+    pub secret: String,
 }
 
 impl Config {
@@ -111,10 +114,12 @@ impl Config {
         Ok(config_data.try_into()?)
     }
 
+    /// create the UDP socket required
     pub fn cmi_listen_socket(&self) -> Result<UdpSocket, std::io::Error> {
         UdpSocket::bind(format!("{}:5442", self.cmi.listen_addr))
     }
 
+    /// load additional certs if required by the config
     fn additional_certs(&self) -> Result<Vec<TrustAnchor<'static>>, Box<dyn std::error::Error>> {
         if let Some(pemfile) = &self.asterisk.trust_extra_pem {
             // read pem file given in the file given in the config
@@ -146,7 +151,7 @@ impl Config {
         let asterisk_tcp = TcpStream::connect(format!(
             "{}:{}",
             self.asterisk.host,
-            self.asterisk.port.unwrap_or(5038)
+            self.asterisk.port.unwrap_or(5039)
         ))?;
         let mut roots: Vec<TrustAnchor> = webpki_roots::TLS_SERVER_ROOTS.into();
         roots.extend(self.additional_certs()?.into_iter());

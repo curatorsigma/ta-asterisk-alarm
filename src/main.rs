@@ -1,14 +1,25 @@
-use std::io::Write;
-use std::net::SocketAddr;
+use std::io::{Read, Write};
+use std::net::{SocketAddr, TcpStream};
+use std::thread::sleep;
+use std::time::Duration;
 
 use coe::Packet;
 use config::Config;
+use rustls::{ClientConnection, StreamOwned};
 use tracing::level_filters::LevelFilter;
-use tracing::{debug, info, trace, warn};
+use tracing::{debug, error, info, trace, warn};
 use tracing_subscriber::fmt::format::FmtSpan;
 use tracing_subscriber::prelude::*;
 
 mod config;
+
+fn try_login(config: &Config, mut stream: StreamOwned<ClientConnection, TcpStream>) -> Result<(), std::io::Error> {
+    let command = format!(
+        "Action: Login\r\nAuthType: plain\r\nUsername: {}\r\nSecret: {}\r\nEvents: off\r\n\r\n", config.asterisk.username, config.asterisk.secret);
+    stream.write(command.as_bytes())?;
+    // TODO check that the response is Success
+    Ok(())
+}
 
 /// Send the AMI command to asterisk.
 fn send_ami_command(config: &Config) -> Result<(), Box<dyn std::error::Error>> {
@@ -20,7 +31,7 @@ fn send_ami_command(config: &Config) -> Result<(), Box<dyn std::error::Error>> {
         "1"
     };
     let command = format!(
-        "Action: Originate\r\nExten: {}\r\nContext: {}\r\nPriority: {}\r\n\r\n",
+        "Action: Originate\r\nExten: {}\r\nContext: {}\r\nPriority: {}\r\n",
         config.asterisk.execute_exten, config.asterisk.execute_context, priority,
     );
     asterisk_stream.write(command.as_bytes())?;
@@ -95,7 +106,14 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let cmi_listen_socket = config.cmi_listen_socket()?;
     // force the opening of a TLS stream. This makes error messages available immediately on
     // startup.
-    let _ = config.asterisk_stream()?;
+    let asterisk_stream = config.asterisk_stream()?;
+    match try_login(&config, asterisk_stream) {
+        Ok(()) => info!("Connection to asterisk could be established."),
+        Err(e) => {
+            error!("Unable to connect to asterisk: {e}");
+            return Err(e)?;
+        }
+    };
 
     info!(
         "Got config and UDP socket. Now listening for COE packets on {}",
