@@ -1,7 +1,8 @@
 [package]
-name = "ta-asterisk-sync"
+name = "ta-asterisk-alarm"
 version = "0.1.0"
 edition = "2021"
+authors = ["Jonathan Schleucher"]
 
 [dependencies]
 coe = "0.2.2"

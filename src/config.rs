@@ -97,7 +97,7 @@ pub struct AsteriskConfig {
 
 impl Config {
     pub fn create() -> Result<Self, Box<dyn std::error::Error>> {
-        let config_path = Path::new("/etc/ta-asterisk-sync/config.yaml");
+        let config_path = Path::new("/etc/ta-asterisk-alarm/config.yaml");
         let f = match File::open(config_path) {
             Ok(x) => x,
             Err(e) => {

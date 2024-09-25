@@ -1,0 +1,15 @@
+services:
+  ta-asterisk-alarm:
+    build: .
+    ports:
+    - 5442:5442/udp
+    volumes:
+    - type: bind
+      source: /etc/ta-asterisk-alarm/config.yaml
+      target: /etc/ta-asterisk-alarm/config.yaml
+      read_only: true
+    - type: bind
+      source: /etc/ssl/ta-asterisk-alarm/
+      target: /etc/ssl/ta-asterisk-alarm/
+      read_only: true
+
