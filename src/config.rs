@@ -20,7 +20,7 @@ pub struct Config {
     pub asterisk: AsteriskConfig,
 }
 impl TryFrom<ConfigData> for Config {
-    type Error = std::net::AddrParseError;
+    type Error = core::net::AddrParseError;
     fn try_from(value: ConfigData) -> Result<Self, Self::Error> {
         Ok(Self {
             cmi: value.cmi.try_into()?,
@@ -47,7 +47,7 @@ pub struct CmiConfig {
     pub expect_pdo: u8,
 }
 impl TryFrom<CmiConfigData> for CmiConfig {
-    type Error = std::net::AddrParseError;
+    type Error = core::net::AddrParseError;
     fn try_from(value: CmiConfigData) -> Result<Self, Self::Error> {
         Ok(Self {
             listen_addr: value.listen_addr.parse()?,
@@ -155,7 +155,7 @@ impl Config {
             self.asterisk.port.unwrap_or(5039)
         ))?;
         let mut roots: Vec<TrustAnchor> = webpki_roots::TLS_SERVER_ROOTS.into();
-        roots.extend(self.additional_certs()?.into_iter());
+        roots.extend(self.additional_certs()?);
         let root_store = rustls::RootCertStore { roots };
         let tls_config = ClientConfig::builder()
             .with_root_certificates(root_store)

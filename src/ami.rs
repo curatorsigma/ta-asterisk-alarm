@@ -74,8 +74,8 @@ impl AmiConnection {
             };
             let first_nullbyte = buf.iter().position(|x| *x == 0);
             // seek to the first \n
-            if let Some(idx) = buf.iter().position(|x| *x == '\n' as u8) {
-                if idx == 0 || buf[idx - 1] != '\r' as u8 {
+            if let Some(idx) = buf.iter().position(|x| *x == b'\n') {
+                if idx == 0 || buf[idx - 1] != b'\r' {
                     return Err(AmiError::IsolatedNewline);
                 }
                 // the spec does not say how the first line is supposed to look like..
@@ -86,7 +86,7 @@ impl AmiConnection {
                     &buf[idx + 1..first_nullbyte.unwrap_or(VERSION_LINE_BUF_LEN)],
                 )?);
                 return Ok(version_line);
-            } else if first_nullbyte == None {
+            } else if first_nullbyte.is_none() {
                 version_line.push_str(std::str::from_utf8(&buf)?);
             } else {
                 return Err(AmiError::EofBeforeNeline);

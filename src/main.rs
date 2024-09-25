@@ -71,15 +71,12 @@ fn packet_is_alarm(
         };
         // we have a packet to the correct CAN-ID and PDO, from the correct Address
         // ignore it if it is not digital.
-        match payload.value() {
-            coe::COEValue::Digital(coe::DigitalCOEValue::OnOff(true)) => {
-                // this is a relevant packet. send the command to ami
-                return Ok(true);
-            }
-            _ => {
-                info!("Got a COE packet, but ignoring it because the value is not DigitalOnOff, with value ON.");
-                return Ok(false);
-            }
+        if let coe::COEValue::Digital(coe::DigitalCOEValue::OnOff(true)) = payload.value() {
+            // this is a relevant packet. send the command to ami
+            return Ok(true);
+        } else {
+            info!("Got a COE packet, but ignoring it because the value is not DigitalOnOff, with value ON.");
+            return Ok(false);
         }
     }
     debug!("Got a COE packet, but no payload was relevant.");
@@ -109,7 +106,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         Ok(_conn) => info!("Connection to asterisk could be established."),
         Err(e) => {
             error!("Unable to connect to asterisk: {e}");
-            return Err(e)?;
+            Err(e)?;
         }
     };
 
@@ -117,6 +114,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         "Got UDP socket and made sure that asterisk is reachable. Now listening for COE packets on {}",
         cmi_listen_socket.local_addr()?
     );
+    // This is the main loop: receive UDP; process and potentially send commands to AMI.
+    // Does not break outside of a potential panic.
+    #[allow(clippy::infinite_loop)]
     loop {
         let mut buf = [0_u8; 252];
         match cmi_listen_socket.recv_from(&mut buf) {
@@ -130,7 +130,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     Ok(true) => match send_ami_command(&config) {
                         Ok(()) => info!("Sent all commands to asterisk."),
                         Err(e) => {
-                            warn!("Tried to send AMI commands to asterisk, but got this error: {e}")
+                            warn!("Tried to send AMI commands to asterisk, but got this error: {e}");
                         }
                     },
                     Err(e) => {
