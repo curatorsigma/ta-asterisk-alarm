@@ -21,10 +21,6 @@ pub enum AmiError {
     NotUtf8(std::str::Utf8Error),
     /// \0 without \n before it
     EofBeforeNeline,
-    /// There was not Response: Line sent but one was expected.
-    NoResponseLine,
-    /// Action was executed, and response received, but Response: Success was not send.
-    ActionUnsuccessful,
     /// Login was attempted but failed.
     LoginFailure,
 }
