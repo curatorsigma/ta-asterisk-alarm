@@ -33,11 +33,12 @@ asterisk:
   # username: username used to login to asterisk
   username: "ta-asterisk-alarm"
   # This secret is used to login to asterisk
+  # it is set in the /etc/asterisk/manager.conf on asterisk as well.
   secret: "NOT_THE_SECRET"
   # execute in this context
   execute_context: "commands"
   # execute this extension in that context
-  execute_exten: "your_exten_name"
+  execute_exten: "alarm"
   # execute starting at this priority of the extension
   # default so "1"
   execute_priority: "1"
