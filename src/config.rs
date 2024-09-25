@@ -10,9 +10,9 @@ use std::{
 
 use rustls::{pki_types::TrustAnchor, ClientConfig, ClientConnection};
 use serde::Deserialize;
-use tracing::{debug, event, Level};
+use tracing::{debug, event, trace, Level};
 
-use crate::ami::{self, AmiConnection};
+use crate::ami::{self, AmiConnection, AmiError};
 
 #[derive(Debug)]
 pub struct Config {
@@ -91,6 +91,8 @@ pub struct AsteriskConfig {
     /// use to login to asterisk
     pub username: String,
     pub secret: String,
+    pub call_external_numbers: Vec<String>,
+    pub caller_id: String,
 }
 
 impl Config {
@@ -164,6 +166,21 @@ impl Config {
         // TLS stream to asterisk
         let asterisk_conn =
             ClientConnection::new(Arc::new(tls_config), self.asterisk.host.clone().try_into()?)?;
-        Ok(AmiConnection::new(rustls::StreamOwned::new(asterisk_conn, asterisk_tcp)))
+        let mut conn = AmiConnection::new(rustls::StreamOwned::new(asterisk_conn, asterisk_tcp));
+
+        let version = conn.read_version_line()?;
+        trace!("Was able to get this version from ami: {version}.");
+        let command = format!(
+            "Action: Login\r\nAuthType: plain\r\nUsername: {}\r\nSecret: {}\r\nEvents: off\r\n\r\n", self.asterisk.username, self.asterisk.secret);
+        let response = conn.send_action(command)?;
+        let success = response.lines()
+            .any(|l| l.starts_with("Response: Success"));
+
+        if success {
+            trace!("Login was acknowledged.");
+            Ok(conn)
+        } else {
+            Err(AmiError::LoginFailure)?
+        }
     }
 }

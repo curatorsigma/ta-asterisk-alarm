@@ -1,12 +1,8 @@
-use std::io::{Read, Write};
-use std::net::{SocketAddr, TcpStream};
-use std::thread::sleep;
-use std::time::Duration;
+use std::net::SocketAddr;
 
 use ami::AmiConnection;
 use coe::Packet;
 use config::Config;
-use rustls::{ClientConnection, StreamOwned};
 use tracing::level_filters::LevelFilter;
 use tracing::{debug, error, info, trace, warn};
 use tracing_subscriber::fmt::format::FmtSpan;
@@ -17,22 +13,6 @@ use crate::ami::AmiError;
 mod config;
 mod ami;
 
-fn try_login(config: &Config, mut ami_conn: AmiConnection) -> Result<(), Box<dyn std::error::Error>> {
-    let version = ami_conn.read_version_line()?;
-    trace!("Was able to get this version from ami: {version}.");
-    let command = format!(
-        "Action: Login\r\nAuthType: plain\r\nUsername: {}\r\nSecret: {}\r\nEvents: off\r\n\r\n", config.asterisk.username, config.asterisk.secret);
-    let response = ami_conn.send_action(command)?;
-    let success = response.lines()
-        .any(|l| l.starts_with("Response: Success"));
-    if success {
-        trace!("Login was acknowledged.");
-    } else {
-        return Err(AmiError::LoginFailure)?;
-    }
-    Ok(())
-}
-
 /// Send the AMI command to asterisk.
 fn send_ami_command(config: &Config) -> Result<(), Box<dyn std::error::Error>> {
     let mut ami_conn = config.asterisk_connection()?;
@@ -42,12 +22,18 @@ fn send_ami_command(config: &Config) -> Result<(), Box<dyn std::error::Error>> {
     } else {
         "1"
     };
-    let command = format!(
-        "Action: Originate\r\nExten: {}\r\nContext: {}\r\nPriority: {}\r\n",
-        config.asterisk.execute_exten, config.asterisk.execute_context, priority,
-    );
-    ami_conn.send_action(command)?;
-    todo!();
+    for external_number in &config.asterisk.call_external_numbers {
+        let command = format!(
+            "Action: Originate\r\nExten: {}\r\nContext: {}\r\nPriority: {}\r\nChannel: {}\r\nCallerID: {}\r\n\r\n",
+            config.asterisk.execute_exten, config.asterisk.execute_context, priority,
+            external_number, config.asterisk.caller_id,
+        );
+        info!("Sending action to asterisk.");
+        match ami_conn.send_action(command) {
+            Ok(response) => debug!("Got this response from asterisk: {response}."),
+            Err(e) => warn!("Error sending Command to asterisk for external number {external_number}: {e}."),
+        }
+    }
     Ok(())
 }
 
@@ -60,7 +46,7 @@ fn packet_is_alarm(
     // check if we want to receive packets from the remote
     if remote.ip() != config.cmi.expect_from_addr {
         trace!(
-            "Got a COE payload, but ignoring it does not come from {}",
+            "Got a COE payload, but ignoring it because it does not come from {}",
             config.cmi.expect_from_addr
         );
         // silently ignore packets from the wrong IP
@@ -119,9 +105,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let cmi_listen_socket = config.cmi_listen_socket()?;
     // force the opening of a TLS stream. This makes error messages available immediately on
     // startup.
-    let ami_conn = config.asterisk_connection()?;
-    match try_login(&config, ami_conn) {
-        Ok(()) => info!("Connection to asterisk could be established."),
+    let ami_conn = config.asterisk_connection();
+    match ami_conn {
+        Ok(_conn) => info!("Connection to asterisk could be established."),
         Err(e) => {
             error!("Unable to connect to asterisk: {e}");
             return Err(e)?;
@@ -129,7 +115,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     };
 
     info!(
-        "Got config and UDP socket. Now listening for COE packets on {}",
+        "Got UDP socket and made sure that asterisk is reachable. Now listening for COE packets on {}",
         cmi_listen_socket.local_addr()?
     );
     loop {
@@ -138,18 +124,18 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             Ok((len, addr)) => {
                 trace!("Received UDP packet of {len} bytes on CMI listen socket.");
                 // We have a relevant packet. Process it.
-                match packet_is_alarm(&config, &buf, addr) {
+                match packet_is_alarm(&config, &buf[0..len], addr) {
                     Ok(false) => {
                         debug!("Correctly handled a single UDP packet from the CMI.");
                     }
                     Ok(true) => match send_ami_command(&config) {
-                        Ok(()) => info!("Correctly send a command to asterisk."),
+                        Ok(()) => info!("Sent all commands to asterisk."),
                         Err(e) => warn!(
-                            "Tried to send an AMI command to asterisk, but got this error: {e}"
+                            "Tried to send AMI commands to asterisk, but got this error: {e}"
                         ),
                     },
                     Err(e) => {
-                        warn!("Error while processing packet: {e}");
+                        warn!("Error while processing incoming UDP packet: {e}");
                     }
                 };
             }

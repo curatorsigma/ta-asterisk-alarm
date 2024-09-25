@@ -41,4 +41,12 @@ asterisk:
   # execute starting at this priority of the extension
   # default so "1"
   execute_priority: "1"
+  # Make calls to ALL of these external numbers (each will be called separately and potentially fail/succeed separately)
+  # They need to contain the Technology and endpoint(trunk) as well. Examples as below
+  call_external_endpoints:
+  # sip_trunk_endpoint needs to be the name of a (pjsip) endpoint so that this string could be `DIAL`d from asterisk
+  - "PJSIP/1111222233334444@sip_trunk_endpoint"
+  # CALLERID(num) that is used to make the calls to external.
+  # This may need to be set, depending on your SIP-Trunk
+  caller_id: "5555666677778888"
 

@@ -3,6 +3,9 @@
 use std::{io::{Read, Write}, net::TcpStream};
 
 use rustls::{ClientConnection, StreamOwned};
+use tracing::warn;
+
+use crate::config::Config;
 
 /// Everything that can go wrong in an AMI connection
 #[derive(Debug)]
@@ -136,6 +139,21 @@ impl AmiConnection {
     pub fn send_action(&mut self, action: String) -> Result<String, AmiError> {
         self.stream.write(action.as_bytes()).map_err(AmiError::Write)?;
         self.read_next_response()
+    }
+}
+/// Logoff before closing the TcpStream
+impl Drop for AmiConnection{
+    fn drop(&mut self) {
+        // this can fail because it sends data over a network.
+        // we simply ignore the error; if the logoff fails, we will simply want to drop the
+        // TcpStream anyways
+        match self.send_action("Action: Logoff\r\n\r\n".to_owned()) {
+            Ok(_) => {
+            }
+            Err(e) => {
+                warn!("Unable to logoff before dropping an AmiConnection: {e}.");
+            }
+        }
     }
 }
 
