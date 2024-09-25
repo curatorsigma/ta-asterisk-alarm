@@ -12,7 +12,7 @@ use rustls::{pki_types::TrustAnchor, ClientConfig, ClientConnection};
 use serde::Deserialize;
 use tracing::{debug, event, trace, Level};
 
-use crate::ami::{self, AmiConnection, AmiError};
+use crate::ami::{AmiConnection, AmiError};
 
 #[derive(Debug)]
 pub struct Config {
@@ -146,10 +146,7 @@ impl Config {
     }
 
     /// prepare the stream to talk to asterisk with
-    pub fn asterisk_connection(
-        &self,
-    ) -> Result<AmiConnection, Box<dyn std::error::Error>>
-    {
+    pub fn asterisk_connection(&self) -> Result<AmiConnection, Box<dyn std::error::Error>> {
         debug!("Trying to connect to Asterisk AMI. Make sure asterisk is reachable if this hangs!");
         // setup rustls config (used for TCP stream with asterisk)
         let asterisk_tcp = TcpStream::connect(format!(
@@ -171,10 +168,11 @@ impl Config {
         let version = conn.read_version_line()?;
         trace!("Was able to get this version from ami: {version}.");
         let command = format!(
-            "Action: Login\r\nAuthType: plain\r\nUsername: {}\r\nSecret: {}\r\nEvents: off\r\n\r\n", self.asterisk.username, self.asterisk.secret);
+            "Action: Login\r\nAuthType: plain\r\nUsername: {}\r\nSecret: {}\r\nEvents: off\r\n\r\n",
+            self.asterisk.username, self.asterisk.secret
+        );
         let response = conn.send_action(command)?;
-        let success = response.lines()
-            .any(|l| l.starts_with("Response: Success"));
+        let success = response.lines().any(|l| l.starts_with("Response: Success"));
 
         if success {
             trace!("Login was acknowledged.");

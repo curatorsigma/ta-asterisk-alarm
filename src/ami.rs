@@ -1,11 +1,12 @@
 //! Handles reading of packets from ami
 
-use std::{io::{Read, Write}, net::TcpStream};
+use std::{
+    io::{Read, Write},
+    net::TcpStream,
+};
 
 use rustls::{ClientConnection, StreamOwned};
 use tracing::warn;
-
-use crate::config::Config;
 
 /// Everything that can go wrong in an AMI connection
 #[derive(Debug)]
@@ -36,7 +37,10 @@ impl core::fmt::Display for AmiError {
             Self::NotUtf8(x) => write!(f, "The received bytes were not utf8: {x}"),
             Self::EofBeforeNeline => write!(f, "There was a nullbyte before an expected newline"),
             Self::NoResponseLine => write!(f, "There was no Response: line, but one was expected."),
-            Self::ActionUnsuccessful => write!(f, "Action was sent and response received, but the response was not Success."),
+            Self::ActionUnsuccessful => write!(
+                f,
+                "Action was sent and response received, but the response was not Success."
+            ),
             Self::LoginFailure => write!(f, "Login was attempted but failed."),
         }
     }
@@ -87,7 +91,9 @@ impl AmiConnection {
                 // so we just ignore the first line completely
                 // but we need to check that they are actually utf-8 first
                 version_line.push_str(std::str::from_utf8(&buf[0..=idx - 1])?);
-                self.buffer.push_str(std::str::from_utf8(&buf[idx + 1..first_nullbyte.unwrap_or(VERSION_LINE_BUF_LEN)])?);
+                self.buffer.push_str(std::str::from_utf8(
+                    &buf[idx + 1..first_nullbyte.unwrap_or(VERSION_LINE_BUF_LEN)],
+                )?);
                 return Ok(version_line);
             } else if first_nullbyte == None {
                 version_line.push_str(std::str::from_utf8(&buf)?);
@@ -111,13 +117,14 @@ impl AmiConnection {
             };
             let first_nullbyte = buf.iter().position(|x| *x == 0);
             // convert bytes to utf-8
-            let as_str = match std::str::from_utf8(&buf[..first_nullbyte.unwrap_or(MESSAGE_BUF_LEN)]) {
-                Ok(x) => x,
-                Err(e) => {
-                    self.buffer.clear();
-                    return Err(e)?;
-                }
-            };
+            let as_str =
+                match std::str::from_utf8(&buf[..first_nullbyte.unwrap_or(MESSAGE_BUF_LEN)]) {
+                    Ok(x) => x,
+                    Err(e) => {
+                        self.buffer.clear();
+                        return Err(e)?;
+                    }
+                };
             if let Some(first_double_crlf_pos) = as_str.find("\r\n\r\n") {
                 self.buffer.push_str(&as_str[..first_double_crlf_pos + 2]);
                 // self.buffer now contains the entire Message we care about (minus the last \r\n
@@ -137,23 +144,23 @@ impl AmiConnection {
 
     /// Send an action to the Server and read the next response.
     pub fn send_action(&mut self, action: String) -> Result<String, AmiError> {
-        self.stream.write(action.as_bytes()).map_err(AmiError::Write)?;
+        self.stream
+            .write(action.as_bytes())
+            .map_err(AmiError::Write)?;
         self.read_next_response()
     }
 }
 /// Logoff before closing the TcpStream
-impl Drop for AmiConnection{
+impl Drop for AmiConnection {
     fn drop(&mut self) {
         // this can fail because it sends data over a network.
         // we simply ignore the error; if the logoff fails, we will simply want to drop the
         // TcpStream anyways
         match self.send_action("Action: Logoff\r\n\r\n".to_owned()) {
-            Ok(_) => {
-            }
+            Ok(_) => {}
             Err(e) => {
                 warn!("Unable to logoff before dropping an AmiConnection: {e}.");
             }
         }
     }
 }
-

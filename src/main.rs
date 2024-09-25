@@ -1,6 +1,5 @@
 use std::net::SocketAddr;
 
-use ami::AmiConnection;
 use coe::Packet;
 use config::Config;
 use tracing::level_filters::LevelFilter;
@@ -8,10 +7,8 @@ use tracing::{debug, error, info, trace, warn};
 use tracing_subscriber::fmt::format::FmtSpan;
 use tracing_subscriber::prelude::*;
 
-use crate::ami::AmiError;
-
-mod config;
 mod ami;
+mod config;
 
 /// Send the AMI command to asterisk.
 fn send_ami_command(config: &Config) -> Result<(), Box<dyn std::error::Error>> {
@@ -31,7 +28,9 @@ fn send_ami_command(config: &Config) -> Result<(), Box<dyn std::error::Error>> {
         info!("Sending action to asterisk.");
         match ami_conn.send_action(command) {
             Ok(response) => debug!("Got this response from asterisk: {response}."),
-            Err(e) => warn!("Error sending Command to asterisk for external number {external_number}: {e}."),
+            Err(e) => warn!(
+                "Error sending Command to asterisk for external number {external_number}: {e}."
+            ),
         }
     }
     Ok(())
@@ -130,9 +129,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     }
                     Ok(true) => match send_ami_command(&config) {
                         Ok(()) => info!("Sent all commands to asterisk."),
-                        Err(e) => warn!(
-                            "Tried to send AMI commands to asterisk, but got this error: {e}"
-                        ),
+                        Err(e) => {
+                            warn!("Tried to send AMI commands to asterisk, but got this error: {e}")
+                        }
                     },
                     Err(e) => {
                         warn!("Error while processing incoming UDP packet: {e}");
