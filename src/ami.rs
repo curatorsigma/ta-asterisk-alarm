@@ -32,11 +32,6 @@ impl core::fmt::Display for AmiError {
             Self::IsolatedNewline => write!(f, "A \\n was encountered without a preceding \\r"),
             Self::NotUtf8(x) => write!(f, "The received bytes were not utf8: {x}"),
             Self::EofBeforeNeline => write!(f, "There was a nullbyte before an expected newline"),
-            Self::NoResponseLine => write!(f, "There was no Response: line, but one was expected."),
-            Self::ActionUnsuccessful => write!(
-                f,
-                "Action was sent and response received, but the response was not Success."
-            ),
             Self::LoginFailure => write!(f, "Login was attempted but failed."),
         }
     }
