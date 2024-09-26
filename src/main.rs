@@ -63,7 +63,8 @@ fn packet_is_alarm(
             );
             continue 'payload;
         };
-        if payload.pdo_index() != config.cmi.expect_pdo {
+        // NOTE: shift the index by +1; date on-wire is one lower then data entered in CMIs web-gui
+        if payload.pdo_index() + 1 != config.cmi.expect_pdo {
             trace!(
                 "Got a COE payload, but ignoring it because the pdo index is not {}",
                 config.cmi.expect_pdo
@@ -72,13 +73,19 @@ fn packet_is_alarm(
         };
         // we have a packet to the correct CAN-ID and PDO, from the correct Address
         // ignore it if it is not digital.
-        if let coe::COEValue::Digital(coe::DigitalCOEValue::OnOff(true)) = payload.value() {
-            // this is a relevant packet. send the command to ami
-            return Ok(true);
-        } else {
-            info!("Got a COE packet, but ignoring it because the value is not DigitalOnOff, with value ON.");
-            return Ok(false);
-        }
+        match payload.value() {
+            coe::COEValue::Digital(coe::DigitalCOEValue::OnOff(true)) => {
+                return Ok(true);
+            }
+            coe::COEValue::Digital(coe::DigitalCOEValue::OnOff(false)) => {
+                trace!("Got correctly formed value from the expected IP/Node/PDO. Value is off.");
+                return Ok(false);
+            }
+            _ => {
+                trace!("Got value from the expected IP/NODE/PDO, but ignoring it because the value is not DigitalOnOff.");
+                return Ok(false);
+            }
+        };
     }
     debug!("Got a COE packet, but no payload was relevant.");
     Ok(false)

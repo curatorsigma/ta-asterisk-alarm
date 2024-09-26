@@ -9,6 +9,7 @@ cmi:
   # ignore data sent to other virtual CAN-IDs
   expect_index: 12
   # ignore data sent to other PDO values
+  # NOTE: this is the PDO set in the web-gui (one more then the value on-wire), keeping in line with CMIs behaviour
   expect_pdo: 1
 
 # configs for asterisk
