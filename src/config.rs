@@ -11,7 +11,7 @@ use std::{
 use rustls::{pki_types::TrustAnchor, ClientConfig, ClientConnection};
 use serde::Deserialize;
 use smol::net::UdpSocket;
-use tracing::{debug, event, trace, Level};
+use tracing::{debug, error, event, trace, Level};
 
 use crate::ami::{AmiConnection, AmiError};
 
@@ -150,20 +150,39 @@ impl Config {
     pub fn asterisk_connection(&self) -> Result<AmiConnection, Box<dyn std::error::Error>> {
         debug!("Trying to connect to Asterisk AMI. Make sure asterisk is reachable if this hangs!");
         // setup rustls config (used for TCP stream with asterisk)
-        let asterisk_tcp = TcpStream::connect(format!(
+        let asterisk_tcp = match TcpStream::connect(format!(
             "{}:{}",
             self.asterisk.host,
             self.asterisk.port.unwrap_or(5039)
-        ))?;
+        )) {
+            Ok(x) => x,
+            Err(e) => {
+                error!("Unable to start TCP socket on {}:{} : {e}", self.asterisk.host, self.asterisk.port.unwrap_or(5039));
+                Err(e)?
+            }
+        };
+
         let mut roots: Vec<TrustAnchor> = webpki_roots::TLS_SERVER_ROOTS.into();
-        roots.extend(self.additional_certs()?);
+        let add_certs = match self.additional_certs() {
+            Ok(x) => x,
+            Err(e) => {
+                error!("Unable to load additional certs from {:?}: {e}", self.asterisk.trust_extra_pem);
+                Err(e)?
+            }
+        };
+        roots.extend(add_certs);
         let root_store = rustls::RootCertStore { roots };
         let tls_config = ClientConfig::builder()
             .with_root_certificates(root_store)
             .with_no_client_auth();
         // TLS stream to asterisk
-        let asterisk_conn =
-            ClientConnection::new(Arc::new(tls_config), self.asterisk.host.clone().try_into()?)?;
+        let asterisk_conn = match ClientConnection::new(Arc::new(tls_config), self.asterisk.host.clone().try_into()?) {
+            Ok(x) => x,
+            Err(e) => {
+                error!("Unable to create a TLS client connection: {e}");
+                Err(e)?
+            }
+        };
         let mut conn = AmiConnection::new(rustls::StreamOwned::new(asterisk_conn, asterisk_tcp));
 
         let version = conn.read_version_line()?;
