@@ -2,10 +2,11 @@ use std::net::SocketAddr;
 
 use coe::Packet;
 use config::Config;
+use smol::net::UdpSocket;
 use tracing::level_filters::LevelFilter;
 use tracing::{debug, error, info, trace, warn};
 use tracing_subscriber::fmt::format::FmtSpan;
-use tracing_subscriber::prelude::*;
+use tracing_subscriber::{prelude::*, EnvFilter};
 
 mod ami;
 mod config;
@@ -83,9 +84,67 @@ fn packet_is_alarm(
     Ok(false)
 }
 
+async fn handle_packet(config: &Config, cmi_listen_socket: &UdpSocket, buf: &mut [u8]) {
+    match cmi_listen_socket.recv_from(buf).await {
+        Ok((len, addr)) => {
+            trace!("Received UDP packet of {len} bytes on CMI listen socket.");
+            // We have a relevant packet. Process it.
+            match packet_is_alarm(&config, &buf[0..len], addr) {
+                Ok(false) => {
+                    debug!("Correctly handled a single UDP packet from the CMI.");
+                }
+                Ok(true) => match send_ami_command(&config) {
+                    Ok(()) => info!("Sent all commands to asterisk."),
+                    Err(e) => {
+                        warn!("Tried to send AMI commands to asterisk, but got this error: {e}");
+                    }
+                },
+                Err(e) => {
+                    warn!("Error while processing incoming UDP packet: {e}");
+                }
+            };
+        }
+        Err(e) => {
+            warn!("Error receiving UDP packet on CMI listen socket: {e}.");
+        }
+    };
+}
+
+async fn shutdown(shutdown_chan: &smol::channel::Receiver<()>) {
+    match shutdown_chan.recv().await {
+        Ok(()) => {
+            info!("Shutting down.");
+            std::process::exit(0);
+        }
+        Err(e) => {
+            warn!("Error while receiving shutdown signal: {e}. Shutting down.");
+            std::process::exit(1);
+        }
+    };
+}
+
+async fn main_loop(
+    config: &Config,
+    cmi_listen_socket: UdpSocket,
+    shutdown_chan: &smol::channel::Receiver<()>,
+) {
+    let mut buf = [0_u8; 252];
+    // This is the main loop: receive UDP; process and potentially send commands to AMI.
+    // Does not break outside of a potential panic.
+    #[allow(clippy::infinite_loop)]
+    loop {
+        smol::future::race(
+            shutdown(shutdown_chan),
+            handle_packet(config, &cmi_listen_socket, &mut buf),
+        )
+        .await;
+    }
+}
+
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     // setup tracing
-    let subscriber = tracing_subscriber::registry().with(
+    let my_crate_filter = EnvFilter::new("ta_asterisk_alarm");
+    let subscriber = tracing_subscriber::registry().with(my_crate_filter).with(
         tracing_subscriber::fmt::layer()
             .compact()
             .with_span_events(FmtSpan::NEW | FmtSpan::CLOSE)
@@ -94,11 +153,19 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     );
     tracing::subscriber::set_global_default(subscriber).expect("static tracing config");
 
+    let (tx, rx) = smol::channel::bounded(1);
+    ctrlc::set_handler(move || {
+        smol::block_on(async {
+            tx.send(()).await.expect("Could not send shutdown message.");
+        })
+    })
+    .expect("Could not install signal handler.");
+
     // setup config
     let config = Config::create()?;
 
     // UDP socket listening for CMI input
-    let cmi_listen_socket = config.cmi_listen_socket()?;
+    let cmi_listen_socket = smol::block_on(config.cmi_listen_socket())?;
     // force the opening of a TLS stream. This makes error messages available immediately on
     // startup.
     let ami_conn = config.asterisk_connection();
@@ -114,33 +181,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         "Got UDP socket and made sure that asterisk is reachable. Now listening for COE packets on {}",
         cmi_listen_socket.local_addr()?
     );
-    // This is the main loop: receive UDP; process and potentially send commands to AMI.
-    // Does not break outside of a potential panic.
-    #[allow(clippy::infinite_loop)]
-    loop {
-        let mut buf = [0_u8; 252];
-        match cmi_listen_socket.recv_from(&mut buf) {
-            Ok((len, addr)) => {
-                trace!("Received UDP packet of {len} bytes on CMI listen socket.");
-                // We have a relevant packet. Process it.
-                match packet_is_alarm(&config, &buf[0..len], addr) {
-                    Ok(false) => {
-                        debug!("Correctly handled a single UDP packet from the CMI.");
-                    }
-                    Ok(true) => match send_ami_command(&config) {
-                        Ok(()) => info!("Sent all commands to asterisk."),
-                        Err(e) => {
-                            warn!("Tried to send AMI commands to asterisk, but got this error: {e}");
-                        }
-                    },
-                    Err(e) => {
-                        warn!("Error while processing incoming UDP packet: {e}");
-                    }
-                };
-            }
-            Err(e) => {
-                warn!("Error receiving UDP packet on CMI listen socket: {e}.");
-            }
-        };
-    }
+    smol::block_on(main_loop(&config, cmi_listen_socket, &rx));
+    Ok(())
 }

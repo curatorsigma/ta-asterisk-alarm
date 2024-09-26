@@ -3,13 +3,14 @@
 use std::{
     fs::File,
     io::BufReader,
-    net::{IpAddr, TcpStream, UdpSocket},
+    net::{IpAddr, TcpStream},
     path::Path,
     sync::Arc,
 };
 
 use rustls::{pki_types::TrustAnchor, ClientConfig, ClientConnection};
 use serde::Deserialize;
+use smol::net::UdpSocket;
 use tracing::{debug, event, trace, Level};
 
 use crate::ami::{AmiConnection, AmiError};
@@ -119,8 +120,8 @@ impl Config {
     }
 
     /// create the UDP socket required
-    pub fn cmi_listen_socket(&self) -> Result<UdpSocket, std::io::Error> {
-        UdpSocket::bind(format!("{}:5442", self.cmi.listen_addr))
+    pub async fn cmi_listen_socket(&self) -> Result<UdpSocket, std::io::Error> {
+        UdpSocket::bind(format!("{}:5442", self.cmi.listen_addr)).await
     }
 
     /// load additional certs if required by the config

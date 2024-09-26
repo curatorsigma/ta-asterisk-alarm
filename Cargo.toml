@@ -6,11 +6,13 @@ authors = ["Jonathan Schleucher"]
 
 [dependencies]
 coe = "0.2.2"
+ctrlc = { version = "3.4.5", features = ["termination"] }
 rustls = "0.23.13"
 rustls-pemfile = "2.1.3"
 rustls-webpki = { version = "0.102.8", default-features = false, features = ["std", "aws_lc_rs"]}
 serde = { version = "1.0.210", features = ["serde_derive"] }
 serde_yaml = "0.9.34"
+smol = "2.0.2"
 tracing = { version = "0.1.40", features = ["attributes"] }
 tracing-appender = "0.2.3"
 tracing-subscriber = { version = "0.3.18", features = ["time", "fmt", "env-filter"] }
