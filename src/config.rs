@@ -92,7 +92,7 @@ pub struct AsteriskConfig {
     /// use to login to asterisk
     pub username: String,
     pub secret: String,
-    pub call_external_numbers: Vec<String>,
+    pub call_external_endpoints: Vec<String>,
     pub caller_id: String,
 }
 
