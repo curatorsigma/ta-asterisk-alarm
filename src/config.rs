@@ -157,7 +157,11 @@ impl Config {
         )) {
             Ok(x) => x,
             Err(e) => {
-                error!("Unable to start TCP socket on {}:{} : {e}", self.asterisk.host, self.asterisk.port.unwrap_or(5039));
+                error!(
+                    "Unable to start TCP socket on {}:{} : {e}",
+                    self.asterisk.host,
+                    self.asterisk.port.unwrap_or(5039)
+                );
                 Err(e)?
             }
         };
@@ -166,7 +170,10 @@ impl Config {
         let add_certs = match self.additional_certs() {
             Ok(x) => x,
             Err(e) => {
-                error!("Unable to load additional certs from {:?}: {e}", self.asterisk.trust_extra_pem);
+                error!(
+                    "Unable to load additional certs from {:?}: {e}",
+                    self.asterisk.trust_extra_pem
+                );
                 Err(e)?
             }
         };
@@ -176,7 +183,10 @@ impl Config {
             .with_root_certificates(root_store)
             .with_no_client_auth();
         // TLS stream to asterisk
-        let asterisk_conn = match ClientConnection::new(Arc::new(tls_config), self.asterisk.host.clone().try_into()?) {
+        let asterisk_conn = match ClientConnection::new(
+            Arc::new(tls_config),
+            self.asterisk.host.clone().try_into()?,
+        ) {
             Ok(x) => x,
             Err(e) => {
                 error!("Unable to create a TLS client connection: {e}");
