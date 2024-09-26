@@ -26,7 +26,7 @@ fn send_ami_command(config: &Config) -> Result<(), Box<dyn std::error::Error>> {
             config.asterisk.execute_exten, config.asterisk.execute_context, priority,
             external_number, config.asterisk.caller_id,
         );
-        info!("Sending action to asterisk.");
+        debug!("Now Sending action to asterisk.");
         match ami_conn.send_action(command) {
             Ok(response) => debug!("Got this response from asterisk: {response}."),
             Err(e) => warn!(
@@ -98,10 +98,10 @@ async fn handle_packet(config: &Config, cmi_listen_socket: &UdpSocket, buf: &mut
             // We have a relevant packet. Process it.
             match packet_is_alarm(config, &buf[0..len], addr) {
                 Ok(false) => {
-                    debug!("Correctly handled a single UDP packet from the CMI.");
+                    trace!("Correctly handled a single UDP packet from the CMI.");
                 }
                 Ok(true) => match send_ami_command(config) {
-                    Ok(()) => info!("Sent all commands to asterisk."),
+                    Ok(()) => info!("Alarm received, all commands send to asterisk successfully."),
                     Err(e) => {
                         warn!("Tried to send AMI commands to asterisk, but got this error: {e}");
                     }
