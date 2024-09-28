@@ -74,11 +74,11 @@ fn packet_is_alarm(
         // we have a packet to the correct CAN-ID and PDO, from the correct Address
         // ignore it if it is not digital.
         match payload.value() {
-            coe::COEValue::Digital(coe::DigitalCOEValue::OnOff(true)) => {
+            coe::COEValue::Digital(coe::DigitalCOEValue::OnOff(false)) => {
                 return Ok(true);
             }
-            coe::COEValue::Digital(coe::DigitalCOEValue::OnOff(false)) => {
-                trace!("Got correctly formed value from the expected IP/Node/PDO. Value is off.");
+            coe::COEValue::Digital(coe::DigitalCOEValue::OnOff(true)) => {
+                trace!("Got correctly formed value from the expected IP/Node/PDO. Value is on.");
                 return Ok(false);
             }
             _ => {
