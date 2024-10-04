@@ -11,6 +11,11 @@ cmi:
   # ignore data sent to other PDO values
   # NOTE: this is the PDO set in the web-gui (one more then the value on-wire), keeping in line with CMIs behaviour
   expect_pdo: 1
+  # IF true:
+  # expect the value ON to be sent; iff OFF is sent (circuit open), originate a call
+  # IF false:
+  # expect the value OFF to be sent; iff ON is sent (circuit closed), originate a call
+  circuit_is_normally_closed: true
 
 # configs for asterisk
 #

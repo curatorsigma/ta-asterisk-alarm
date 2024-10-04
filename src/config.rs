@@ -46,6 +46,11 @@ pub struct CmiConfig {
     pub expect_index: u8,
     /// expect this PDO in messages we get (ignore others)
     pub expect_pdo: u8,
+    /// IF true:
+    /// expect the value ON to be sent; iff OFF is sent (circuit open), originate a call
+    /// IF false:
+    /// expect the value OFF to be sent; iff ON is sent (circuit closed), originate a call
+    pub circuit_is_normally_closed: bool,
 }
 impl TryFrom<CmiConfigData> for CmiConfig {
     type Error = core::net::AddrParseError;
@@ -55,6 +60,7 @@ impl TryFrom<CmiConfigData> for CmiConfig {
             expect_from_addr: value.expect_from_addr.parse()?,
             expect_index: value.expect_index,
             expect_pdo: value.expect_pdo,
+            circuit_is_normally_closed: value.circuit_is_normally_closed,
         })
     }
 }
@@ -70,6 +76,7 @@ pub struct CmiConfigData {
     pub expect_index: u8,
     /// expect this PDO in messages we get (ignore others)
     pub expect_pdo: u8,
+    pub circuit_is_normally_closed: bool,
 }
 
 /// Configuration for the interaction with Asterisk.

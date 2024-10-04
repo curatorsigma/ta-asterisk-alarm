@@ -74,12 +74,16 @@ fn packet_is_alarm(
         // we have a packet to the correct CAN-ID and PDO, from the correct Address
         // ignore it if it is not digital.
         match payload.value() {
-            coe::COEValue::Digital(coe::DigitalCOEValue::OnOff(true)) => {
-                return Ok(true);
-            }
-            coe::COEValue::Digital(coe::DigitalCOEValue::OnOff(false)) => {
-                trace!("Got correctly formed value from the expected IP/Node/PDO. Value is off.");
-                return Ok(false);
+            // Originate an alarm iff:
+            // IF the circuit is_normally_closed, we alarm when false is sent
+            // IF the circuit IS NOT is_normally_closed, we alarm when true is sent
+            coe::COEValue::Digital(coe::DigitalCOEValue::OnOff(x)) => {
+                if x == config.cmi.circuit_is_normally_closed {
+                    trace!("Got correctly formed value from the expected IP/Node/PDO. Value is {x}, which is the no-alarm state.");
+                    return Ok(false);
+                } else {
+                    return Ok(true);
+                }
             }
             _ => {
                 trace!("Got value from the expected IP/NODE/PDO, but ignoring it because the value is not DigitalOnOff.");
