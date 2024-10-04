@@ -22,7 +22,7 @@ fn send_ami_command(config: &Config) -> Result<(), Box<dyn std::error::Error>> {
     };
     for external_number in &config.asterisk.call_external_endpoints {
         let command = format!(
-            "Action: Originate\r\nExten: {}\r\nContext: {}\r\nPriority: {}\r\nChannel: {}\r\nCallerID: {}\r\n\r\n",
+            "Action: Originate\r\nExten: {}\r\nContext: {}\r\nPriority: {}\r\nChannel: {}\r\nCallerID: {}\r\nAsync: true\r\n\r\n",
             config.asterisk.execute_exten, config.asterisk.execute_context, priority,
             external_number, config.asterisk.caller_id,
         );
