@@ -26,7 +26,6 @@ fn send_ami_command(config: &Config) -> Result<(), Box<dyn std::error::Error>> {
             config.asterisk.execute_exten, config.asterisk.execute_context, priority,
             external_number, config.asterisk.caller_id,
         );
-        debug!("Now Sending action to asterisk.");
         match ami_conn.send_action(command) {
             Ok(response) => debug!("Got this response from asterisk: {response}."),
             Err(e) => warn!(

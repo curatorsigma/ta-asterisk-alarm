@@ -5,13 +5,13 @@ use std::{
     io::BufReader,
     net::{IpAddr, TcpStream},
     path::Path,
-    sync::Arc,
+    sync::Arc, time::Duration,
 };
 
 use rustls::{pki_types::TrustAnchor, ClientConfig, ClientConnection};
 use serde::Deserialize;
 use smol::net::UdpSocket;
-use tracing::{debug, error, event, trace, Level};
+use tracing::{debug, error, event, trace, warn, Level};
 
 use crate::ami::{AmiConnection, AmiError};
 
@@ -155,7 +155,7 @@ impl Config {
 
     /// prepare the stream to talk to asterisk with
     pub fn asterisk_connection(&self) -> Result<AmiConnection, Box<dyn std::error::Error>> {
-        debug!("Trying to connect to Asterisk AMI. Make sure asterisk is reachable if this hangs!");
+        debug!("Trying to connect to Asterisk AMI. Make sure asterisk is reachable if this hangs or fails!");
         // setup rustls config (used for TCP stream with asterisk)
         let asterisk_tcp = match TcpStream::connect(format!(
             "{}:{}",
@@ -172,6 +172,9 @@ impl Config {
                 Err(e)?
             }
         };
+        // this timeout is very long, because AMI may sometimes wait a long time until it sends
+        // more bytes.
+        asterisk_tcp.set_read_timeout(Some(Duration::from_millis(5000))).expect("statically not-null time given.");
 
         let mut roots: Vec<TrustAnchor> = webpki_roots::TLS_SERVER_ROOTS.into();
         let add_certs = match self.additional_certs() {
@@ -208,7 +211,13 @@ impl Config {
             "Action: Login\r\nAuthType: plain\r\nUsername: {}\r\nSecret: {}\r\nEvents: off\r\n\r\n",
             self.asterisk.username, self.asterisk.secret
         );
-        let response = conn.send_action(command)?;
+        let response = match conn.send_action(command) {
+            Ok(x) => x,
+            Err(e) => {
+                warn!("Underlying error while trying to establish connection to asterisk: {e}.");
+                return Err(AmiError::LoginFailure)?;
+            }
+        };
         let success = response.lines().any(|l| l.starts_with("Response: Success"));
 
         if success {

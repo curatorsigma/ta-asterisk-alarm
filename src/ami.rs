@@ -6,7 +6,7 @@ use std::{
 };
 
 use rustls::{ClientConnection, StreamOwned};
-use tracing::warn;
+use tracing::{trace, warn};
 
 /// Everything that can go wrong in an AMI connection
 #[derive(Debug)]
@@ -23,6 +23,8 @@ pub enum AmiError {
     EofBeforeNeline,
     /// Login was attempted but failed.
     LoginFailure,
+    /// No bytes were received from AMI while expecting bytes
+    NoBytes,
 }
 impl core::fmt::Display for AmiError {
     fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
@@ -33,6 +35,7 @@ impl core::fmt::Display for AmiError {
             Self::NotUtf8(x) => write!(f, "The received bytes were not utf8: {x}"),
             Self::EofBeforeNeline => write!(f, "There was a nullbyte before an expected newline"),
             Self::LoginFailure => write!(f, "Login was attempted but failed."),
+            Self::NoBytes => write!(f, "Received no bytes from TcpStream."),
         }
     }
 }
@@ -104,7 +107,7 @@ impl AmiConnection {
         loop {
             let bytes_read = self.stream.read(&mut buf).map_err(AmiError::Read)?;
             if bytes_read == 0 {
-                continue;
+                return Err(AmiError::NoBytes);
             };
             let first_nullbyte = buf.iter().position(|x| *x == 0);
             // convert bytes to utf-8
@@ -147,8 +150,11 @@ impl Drop for AmiConnection {
         // this can fail because it sends data over a network.
         // we simply ignore the error; if the logoff fails, we will simply want to drop the
         // TcpStream anyways
+        trace!("Trying to drop ami conn");
         match self.send_action("Action: Logoff\r\n\r\n".to_owned()) {
-            Ok(_) => {}
+            Ok(_) => {
+                trace!("logged off from ami");
+            }
             Err(e) => {
                 warn!("Unable to logoff before dropping an AmiConnection: {e}.");
             }
