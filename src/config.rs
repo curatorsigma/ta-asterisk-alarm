@@ -101,6 +101,7 @@ pub struct AsteriskConfig {
     pub secret: String,
     pub call_external_endpoints: Vec<String>,
     pub caller_id: String,
+    pub repeat_alarm: Option<u32>,
 }
 
 impl Config {

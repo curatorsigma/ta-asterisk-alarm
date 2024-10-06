@@ -56,4 +56,8 @@ asterisk:
   # CALLERID(num) that is used to make the calls to external.
   # This may need to be set, depending on your SIP-Trunk
   caller_id: "5555666677778888"
+  # repeat the alarm at most x times
+  # resets once one good state packet arrives
+  # default: infinite
+  repeat_alarm: 8
 

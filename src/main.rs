@@ -1,4 +1,5 @@
 use std::net::SocketAddr;
+use std::sync::atomic::AtomicU32;
 
 use coe::Packet;
 use config::Config;
@@ -94,19 +95,36 @@ fn packet_is_alarm(
     Ok(false)
 }
 
-async fn handle_packet(config: &Config, cmi_listen_socket: &UdpSocket, buf: &mut [u8]) {
+async fn handle_packet(config: &Config, cmi_listen_socket: &UdpSocket, buf: &mut [u8], alarm_sent_counter: &AtomicU32) {
     match cmi_listen_socket.recv_from(buf).await {
         Ok((len, addr)) => {
             trace!("Received UDP packet of {len} bytes on CMI listen socket.");
             // We have a relevant packet. Process it.
             match packet_is_alarm(config, &buf[0..len], addr) {
                 Ok(false) => {
+                    // reset the alarm repeat count
+                    alarm_sent_counter.store(0, std::sync::atomic::Ordering::Relaxed);
                     trace!("Correctly handled a single UDP packet from the CMI.");
                 }
-                Ok(true) => match send_ami_command(config) {
-                    Ok(()) => info!("Alarm received, all commands send to asterisk successfully."),
-                    Err(e) => {
-                        warn!("Tried to send AMI commands to asterisk, but got this error: {e}");
+                Ok(true) => {
+                    // check if we have already sent the alarm to many times
+                    let send_command = if let Some(max_nr_of_repeats) = config.asterisk.repeat_alarm {
+                        max_nr_of_repeats >= alarm_sent_counter.load(std::sync::atomic::Ordering::Relaxed)
+                    } else {
+                        true
+                    };
+                    if send_command {
+                        match send_ami_command(config) {
+                            Ok(()) => {
+                                alarm_sent_counter.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+                                info!("Alarm received, all commands send to asterisk successfully.");
+                            }
+                            Err(e) => {
+                                warn!("Tried to send AMI commands to asterisk, but got this error: {e}");
+                            }
+                        }
+                    } else {
+                        info!("Received an Alarm, but I have already called the max number of times.")
                     }
                 },
                 Err(e) => {
@@ -139,13 +157,15 @@ async fn main_loop(
     shutdown_chan: &smol::channel::Receiver<()>,
 ) {
     let mut buf = [0_u8; 252];
+    // tracks how many times we have already sent the alarm
+    let alarm_sent_counter = AtomicU32::new(0);
     // This is the main loop: receive UDP; process and potentially send commands to AMI.
     // Does not break outside of a potential panic.
     #[allow(clippy::infinite_loop)]
     loop {
         smol::future::race(
             shutdown(shutdown_chan),
-            handle_packet(config, &cmi_listen_socket, &mut buf),
+            handle_packet(config, &cmi_listen_socket, &mut buf, &alarm_sent_counter),
         )
         .await;
     }
